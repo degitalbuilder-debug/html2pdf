@@ -1,7 +1,8 @@
-// server.js (Playwright version)
+// server.js (Serverless + Vercel Ready)
 import express from 'express';
 import cors from 'cors';
-import { chromium } from 'playwright'; // Install with: npm install playwright
+import { chromium } from 'playwright-core';
+import chromiumLauncher from '@sparticuz/chromium';
 import bodyParser from 'body-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -24,24 +25,28 @@ app.post('/generate-pdf-from-html', async (req, res) => {
   try {
     const { html } = req.body;
 
-    const browser = await chromium.launch(); // headless by default
+    // 🧠 Detect environment and pick correct Chromium path
+    const executablePath =
+      process.env.VERCEL || process.env.AWS_EXECUTION_ENV
+        ? await chromiumLauncher.executablePath()
+        : undefined;
+
+    const browser = await chromium.launch({
+      args: chromiumLauncher.args,
+      executablePath,
+      headless: chromiumLauncher.headless,
+    });
+
     const page = await browser.newPage();
 
     const fullHTML = `
       <html>
         <head>
-        <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-          
+          <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
           <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
           <style>
-            @page {
-              margin: 40px;
-            }
-            body {
-              font-family: serif;
-              margin: 0;
-              padding: 0;
-            }
+            @page { margin: 40px; }
+            body { font-family: serif; margin: 0; padding: 0; }
             .text-xl { font-size: 1.25rem; }
             .font-bold { font-weight: bold; }
             .mb-4 { margin-bottom: 1rem; }
@@ -54,9 +59,7 @@ app.post('/generate-pdf-from-html', async (req, res) => {
             .list-disc { list-style-type: disc; }
           </style>
         </head>
-        <body>
-          ${html}
-        </body>
+        <body>${html}</body>
       </html>
     `;
 
@@ -65,7 +68,7 @@ app.post('/generate-pdf-from-html', async (req, res) => {
     const pdfBuffer = await page.pdf({
       format: 'A4',
       margin: { top: '40px', bottom: '40px', left: '40px', right: '40px' },
-      printBackground: true
+      printBackground: true,
     });
 
     await browser.close();
@@ -79,5 +82,5 @@ app.post('/generate-pdf-from-html', async (req, res) => {
   }
 });
 
-const PORT = 4000;
+const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`✅ Server running at http://localhost:${PORT}`));
